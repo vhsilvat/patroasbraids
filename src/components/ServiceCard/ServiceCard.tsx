@@ -55,10 +55,10 @@ const ServiceCard: React.FC<ServiceCardProps> = ({ service, onSelect }) => {
       
       <div className="p-4">
         <h3 className="text-lg font-bold text-primary mb-1">{name}</h3>
-        <p className="text-gray-600 text-sm mb-2 line-clamp-2">{description}</p>
+        <p className="text-neutral-600 text-sm mb-2 line-clamp-2">{description}</p>
         
         <div className="flex justify-between items-center mt-3">
-          <span className="text-gray-500 text-sm">
+          <span className="text-neutral-500 text-sm">
             <span className="inline-block w-5" aria-hidden="true">⏱</span> {formatDuration(duration)}
           </span>
           <span className="font-bold text-primary">{formatPrice(price)}</span>

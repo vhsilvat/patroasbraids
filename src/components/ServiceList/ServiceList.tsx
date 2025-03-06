@@ -90,7 +90,7 @@ const ServiceList: React.FC<ServiceListProps> = ({ onSelectService }) => {
 
   if (services.length === 0) {
     return (
-      <div className="text-center p-8 text-gray-500" data-testid="empty">
+      <div className="text-center p-8 text-neutral-500" data-testid="empty">
         <p>Nenhum serviço disponível no momento.</p>
       </div>
     );
