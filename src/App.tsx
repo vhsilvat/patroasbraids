@@ -21,14 +21,14 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-neutral-50">
+    <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
       
       <main className="flex-grow container mx-auto px-4 py-8">
         {appointmentStep === 'select-service' && (
           <div>
             <h2 className="text-3xl font-bold text-primary mb-6">Nossos Serviços</h2>
-            <p className="mb-6 text-neutral-600">Selecione um serviço para agendar:</p>
+            <p className="mb-6 text-gray-600">Selecione um serviço para agendar:</p>
             <ServiceList onSelectService={handleServiceSelect} />
           </div>
         )}
