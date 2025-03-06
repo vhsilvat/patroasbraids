@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { createAppointment } from '../../lib/services';
-import { createPaymentPreference, simulatePaymentApproval } from '../../lib/mercadopago';
+import { createAppointment, getServiceById } from '../../lib/services';
 import { Service, Professional } from '../../types/supabase';
+import MockPixPayment from './MockPixPayment';
 
 interface PaymentProcessorProps {
   serviceId: number;
@@ -27,12 +27,9 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({
   const [service, setService] = useState<Service | null>(null);
   const [professional, setProfessional] = useState<Professional | null>(null);
   const [appointmentId, setAppointmentId] = useState<number | null>(null);
-  const [paymentId, setPaymentId] = useState<number | null>(null);
-  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
-  const [paymentStatus, setPaymentStatus] = useState<'pending' | 'approved' | 'rejected'>('pending');
 
   // Etapas do processamento de pagamento
-  const [step, setStep] = useState<'creating' | 'checkout' | 'completed' | 'failed'>('creating');
+  const [step, setStep] = useState<'creating' | 'payment' | 'completed' | 'failed'>('creating');
 
   useEffect(() => {
     async function processAppointment() {
@@ -45,26 +42,8 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({
       try {
         setLoading(true);
         
-        // 1. Criar agendamento no Supabase
-        const appointmentData = {
-          user_id: user.id,
-          professional_id: professionalId,
-          service_id: serviceId,
-          appointment_date: date,
-          appointment_time: time,
-          status: 'pending' as const
-        };
-        
-        const { data: appointmentResult, error: appointmentError } = await createAppointment(appointmentData);
-        
-        if (appointmentError || !appointmentResult) {
-          throw new Error(appointmentError?.message || 'Erro ao criar agendamento');
-        }
-        
-        setAppointmentId(appointmentResult.id);
-        
-        // 2. Em um cenário real, buscaríamos os detalhes do serviço e profissional
-        // Simulação para desenvolvimento:
+        // 1. Tentar obter informações do serviço
+        // Em um cenário real buscaria do Supabase, mas vamos simular para desenvolvimento
         setService({
           id: serviceId,
           name: 'Box Braids',
@@ -81,30 +60,36 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({
           availability: []
         });
         
-        // 3. Criar preferência de pagamento no Mercado Pago
-        const paymentParams = {
-          appointmentId: appointmentResult.id,
-          serviceId: serviceId,
-          serviceName: 'Box Braids', // Em produção, usar service.name
-          servicePrice: 250.00, // Em produção, usar service.price
-          clientName: profile.name,
-          clientEmail: profile.email,
-          appointmentDate: date,
-          appointmentTime: time
+        // 2. Criar agendamento no Supabase
+        const appointmentData = {
+          user_id: user.id,
+          professional_id: professionalId,
+          service_id: serviceId,
+          appointment_date: date,
+          appointment_time: time,
+          status: 'pending' as const
         };
         
-        const paymentResult = await createPaymentPreference(paymentParams);
+        // Em um cenário real, faremos a chamada para o Supabase
+        // Para desenvolvimento, vamos simular:
+        /*
+        const { data: appointmentResult, error: appointmentError } = await createAppointment(appointmentData);
         
-        if (!paymentResult.success || !paymentResult.checkoutUrl) {
-          throw new Error(paymentResult.error || 'Erro ao criar pagamento');
+        if (appointmentError || !appointmentResult) {
+          throw new Error(appointmentError?.message || 'Erro ao criar agendamento');
         }
         
-        setPaymentId(paymentResult.paymentId || null);
-        setCheckoutUrl(paymentResult.checkoutUrl);
-        setStep('checkout');
+        setAppointmentId(appointmentResult.id);
+        */
+        
+        // Simulação do ID do agendamento
+        setAppointmentId(Math.floor(Math.random() * 10000));
+        
+        // Mudar para a etapa de pagamento
+        setStep('payment');
         
       } catch (err: any) {
-        console.error('Erro no processamento do pagamento:', err);
+        console.error('Erro no processamento do agendamento:', err);
         setError(err.message || 'Ocorreu um erro ao processar seu agendamento');
         setStep('failed');
       } finally {
@@ -115,32 +100,16 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({
     processAppointment();
   }, [user, profile, serviceId, professionalId, date, time]);
 
-  // Função para simular aprovação de pagamento (apenas para desenvolvimento)
-  const handleSimulatePayment = async () => {
-    if (!paymentId) return;
+  // Função para lidar com o sucesso do pagamento
+  const handlePaymentSuccess = () => {
+    // Aqui seria atualizado o status do pagamento no Supabase
+    // Para simulação, vamos apenas exibir a mensagem de sucesso e redirecionar
+    setStep('completed');
     
-    setLoading(true);
-    
-    try {
-      const success = await simulatePaymentApproval(paymentId);
-      
-      if (success) {
-        setPaymentStatus('approved');
-        setStep('completed');
-        // Aguardar um momento para mostrar a confirmação antes de redirecionar
-        setTimeout(() => {
-          onSuccess();
-        }, 2000);
-      } else {
-        throw new Error('Falha ao processar pagamento');
-      }
-    } catch (err: any) {
-      console.error('Erro ao simular pagamento:', err);
-      setError(err.message || 'Erro ao processar pagamento');
-      setStep('failed');
-    } finally {
-      setLoading(false);
-    }
+    // Aguardar um momento para mostrar a confirmação antes de redirecionar
+    setTimeout(() => {
+      onSuccess();
+    }, 2000);
   };
 
   const renderStepContent = () => {
@@ -148,56 +117,25 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({
       case 'creating':
         return (
           <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto mb-4"></div>
+            <div 
+              className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto mb-4"
+              role="status"
+              aria-label="Carregando"
+            ></div>
             <p>Preparando seu agendamento...</p>
           </div>
         );
         
-      case 'checkout':
+      case 'payment':
+        if (!service) return null;
+        
         return (
-          <div className="py-4">
-            <div className="mb-6">
-              <h3 className="font-semibold text-lg mb-2">Resumo do agendamento</h3>
-              <div className="bg-gray-50 p-4 rounded-md">
-                <p><span className="font-medium">Serviço:</span> {service?.name}</p>
-                <p><span className="font-medium">Profissional:</span> {professional?.name}</p>
-                <p><span className="font-medium">Data:</span> {new Date(date).toLocaleDateString('pt-BR')}</p>
-                <p><span className="font-medium">Horário:</span> {time}</p>
-                <p><span className="font-medium">Valor total:</span> {service?.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                <p className="font-medium mt-2">Sinal a pagar: {service ? (service.price * 0.5).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}</p>
-              </div>
-            </div>
-            
-            <div className="mb-4 p-3 bg-yellow-50 rounded-md">
-              <p className="text-sm text-yellow-800">
-                <strong>Importante:</strong> Em ambiente de produção, você seria redirecionado para a página de pagamento do Mercado Pago.
-                Para fins de demonstração, você pode simular a aprovação do pagamento clicando no botão abaixo.
-              </p>
-            </div>
-            
-            <div className="flex flex-col space-y-3">
-              <button
-                onClick={handleSimulatePayment}
-                disabled={loading}
-                className="btn btn-primary flex items-center justify-center"
-              >
-                {loading ? (
-                  <>
-                    <span className="animate-spin h-5 w-5 mr-2 border-t-2 border-b-2 border-white rounded-full"></span>
-                    Processando...
-                  </>
-                ) : 'Simular aprovação do pagamento'}
-              </button>
-              
-              <button
-                onClick={onCancel}
-                disabled={loading}
-                className="btn btn-outline"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
+          <MockPixPayment 
+            amount={service.price * 0.5} // 50% do valor
+            serviceName={service.name}
+            onSuccess={handlePaymentSuccess}
+            onCancel={onCancel}
+          />
         );
         
       case 'completed':
@@ -232,12 +170,15 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({
             </button>
           </div>
         );
+        
+      default:
+        return null;
     }
   };
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold text-primary mb-4">Processamento de Pagamento</h2>
+      <h2 className="text-2xl font-bold text-primary mb-4">Processamento de Agendamento</h2>
       {renderStepContent()}
     </div>
   );
