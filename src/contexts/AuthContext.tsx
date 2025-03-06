@@ -19,7 +19,11 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any | null }>;
-  signUp: (email: string, password: string, userData: Partial<UserProfile>) => Promise<{ error: any | null, user: User | null }>;
+  signUp: (email: string, password: string, userData: Partial<UserProfile>) => Promise<{ 
+    error: any | null, 
+    user: User | null,
+    needsEmailConfirmation?: boolean 
+  }>;
   signOut: () => Promise<void>;
   updateProfile: (data: Partial<UserProfile>) => Promise<{ error: any | null }>;
   isAdmin: () => boolean;
@@ -112,7 +116,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         data: {
           name: userData.name,
           role: 'client' // Always client role for new users
-        }
+        },
+        emailRedirectTo: window.location.origin // Redireciona de volta para o app após confirmação
       }
     });
     
@@ -120,11 +125,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return { error, user: null };
     }
     
+    // Verificar se o usuário precisa de confirmação de email
+    const needsEmailConfirmation = !data.user.email_confirmed_at;
+    
     // Esperar um momento para garantir que o usuário foi criado
     // O gatilho no Supabase criará o perfil automaticamente
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    return { error: null, user: data.user };
+    return { 
+      error: needsEmailConfirmation 
+        ? { message: 'Verifique seu email para confirmar o cadastro antes de fazer login' } 
+        : null, 
+      user: data.user,
+      needsEmailConfirmation 
+    };
   };
 
   const signOut = async () => {

@@ -217,6 +217,48 @@ AS $$
   SELECT id FROM auth.users WHERE auth.users.email = email;
 $$;
 
+-- Função para obter metadados do usuário (para uso administrativo)
+CREATE OR REPLACE FUNCTION public.admin_get_user_meta(id uuid)
+RETURNS jsonb
+LANGUAGE sql SECURITY DEFINER
+AS $$
+  SELECT raw_user_meta_data FROM auth.users WHERE auth.users.id = id;
+$$;
+
+-- Função para atualizar a role do usuário em todos os locais necessários
+CREATE OR REPLACE FUNCTION public.admin_update_user_role(uid uuid, new_role text)
+RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER
+AS $$
+DECLARE
+  result jsonb;
+BEGIN
+  -- 1. Atualizar a tabela de perfis
+  UPDATE public.profiles
+  SET role = new_role
+  WHERE id = uid;
+  
+  -- 2. Atualizar os metadados do usuário
+  UPDATE auth.users
+  SET raw_user_meta_data = 
+    jsonb_set(
+      COALESCE(raw_user_meta_data, '{}'::jsonb),
+      '{role}',
+      concat('"', new_role, '"')::jsonb
+    ),
+    raw_app_meta_data = 
+    jsonb_set(
+      COALESCE(raw_app_meta_data, '{}'::jsonb),
+      '{role}',
+      concat('"', new_role, '"')::jsonb
+    )
+  WHERE id = uid
+  RETURNING raw_user_meta_data INTO result;
+  
+  RETURN result;
+END;
+$$;
+
 -- Aplicar gatilho a todas as tabelas
 CREATE TRIGGER update_profiles_updated_at
   BEFORE UPDATE ON public.profiles

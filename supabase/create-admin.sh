@@ -41,9 +41,9 @@ fi
 
 echo "Usuário encontrado com ID: $USER_ID"
 
-# Promover usuário para admin
-echo "Promovendo usuário para admin..."
-UPDATE_RESULT=$(curl -s \
+# Promover usuário para admin na tabela profiles
+echo "Promovendo usuário para admin na tabela profiles..."
+UPDATE_PROFILE=$(curl -s \
   -H "apikey: $SERVICE_KEY" \
   -H "Authorization: Bearer $SERVICE_KEY" \
   -H "Content-Type: application/json" \
@@ -51,12 +51,29 @@ UPDATE_RESULT=$(curl -s \
   -X PATCH "https://$PROJECT_REF.supabase.co/rest/v1/profiles?id=eq.$USER_ID" \
   -d "{\"role\":\"admin\"}")
 
-if [ -z "$UPDATE_RESULT" ]; then
-  echo "Usuário promovido para admin com sucesso!"
-else
-  echo "Erro ao promover usuário para admin: $UPDATE_RESULT"
+if [ ! -z "$UPDATE_PROFILE" ]; then
+  echo "Erro ao atualizar perfil: $UPDATE_PROFILE"
   exit 1
 fi
+
+# Atualizar os metadados do usuário
+echo "Atualizando metadados do usuário..."
+
+# Obter metadados atuais
+USER_META=$(curl -s \
+  -H "apikey: $SERVICE_KEY" \
+  -H "Authorization: Bearer $SERVICE_KEY" \
+  "https://$PROJECT_REF.supabase.co/rest/v1/rpc/admin_get_user_meta?id=$USER_ID")
+
+# Usar função RPC personalizada para atualizar os metadados
+UPDATE_META=$(curl -s \
+  -H "apikey: $SERVICE_KEY" \
+  -H "Authorization: Bearer $SERVICE_KEY" \
+  -H "Content-Type: application/json" \
+  "https://$PROJECT_REF.supabase.co/rest/v1/rpc/admin_update_user_role" \
+  -d "{\"uid\":\"$USER_ID\",\"role\":\"admin\"}")
+
+echo "Usuário promovido para admin com sucesso!"
 
 # Verificar se a atualização foi bem-sucedida
 VERIFICATION=$(curl -s \
