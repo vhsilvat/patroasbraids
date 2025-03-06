@@ -120,19 +120,44 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return { error, user: null };
     }
     
-    // Then create profile in profiles table
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .insert([
-        {
-          id: data.user.id,
-          email,
-          ...userData
-        }
-      ]);
+    // Esperar um momento para garantir que o usuário foi criado
+    // Isso é necessário porque o gatilho do Supabase pode demorar um pouco
+    await new Promise(resolve => setTimeout(resolve, 1000));
     
-    if (profileError) {
-      return { error: profileError, user: data.user };
+    // Tentar criar o perfil diretamente
+    try {
+      // Verificar primeiro se o perfil já existe (pode ter sido criado por um gatilho)
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+      
+      // Se o perfil não existe, criar um novo
+      if (!existingProfile) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert([
+            {
+              id: data.user.id,
+              email,
+              name: userData.name || '',
+              role: userData.role || 'client',
+              phone: userData.phone || ''
+            }
+          ]);
+        
+        if (profileError) {
+          console.error('Erro ao criar perfil:', profileError);
+          
+          // Mesmo com erro no perfil, retornamos o usuário criado
+          // O perfil pode ser criado depois pelo admin ou por outro método
+          return { error: profileError, user: data.user };
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao verificar/criar perfil:', err);
+      // Continuar mesmo com erro, já que o usuário de autenticação foi criado
     }
     
     return { error: null, user: data.user };
