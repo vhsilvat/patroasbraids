@@ -75,7 +75,9 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick }) => 
       }
       
       setResetSent(true);
+      console.log("Password reset email sent successfully");
     } catch (err: any) {
+      console.error("Error sending password reset email:", err);
       setResetError(err.message || 'Erro ao enviar o email de recuperação');
     } finally {
       setResetLoading(false);

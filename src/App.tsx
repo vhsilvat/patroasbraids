@@ -119,30 +119,32 @@ function ResetPassword() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   
-  // Verificar se há um hash de acesso na URL (necessário para redefinir a senha)
+  // Escutar eventos de autenticação, especificamente PASSWORD_RECOVERY
   useEffect(() => {
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const accessToken = hashParams.get('access_token');
-    const refreshToken = hashParams.get('refresh_token');
-    const type = hashParams.get('type');
+    // Verificar o estado atual da autenticação quando a página é carregada
+    const checkAuthSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      console.log("Current session:", data.session);
+    };
     
-    // Se temos tokens na URL, vamos configurar a sessão
-    if (accessToken && type === 'recovery') {
-      const setSession = async () => {
-        const { error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken || '',
-        });
-        
-        if (error) {
-          console.error('Erro ao configurar sessão:', error);
-          setError('Link de recuperação inválido ou expirado. Por favor, solicite um novo link.');
-        }
-      };
+    checkAuthSession();
+    
+    // Configurar o ouvinte para mudanças de estado de autenticação
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("Auth event:", event);
       
-      setSession();
-    }
+      if (event === "PASSWORD_RECOVERY") {
+        console.log("Password recovery event detected");
+        setIsPasswordRecovery(true);
+      }
+    });
+    
+    // Limpar o ouvinte quando o componente é desmontado
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, []);
   
   const handleResetPassword = async (e: React.FormEvent) => {
@@ -157,14 +159,13 @@ function ResetPassword() {
     setError(null);
     
     try {
-      const { error } = await supabase.auth.updateUser({ password });
+      console.log("Attempting to update password");
+      const { data, error } = await supabase.auth.updateUser({ password });
+      console.log("Update result:", data, error);
       
       if (error) {
         throw error;
       }
-      
-      // Se deu certo, vamos limpar o hash da URL para maior segurança
-      window.history.replaceState(null, '', window.location.pathname);
       
       setSuccess(true);
     } catch (err: any) {
@@ -195,7 +196,7 @@ function ResetPassword() {
               Ir para o login
             </Link>
           </div>
-        ) : (
+        ) : isPasswordRecovery ? (
           <form onSubmit={handleResetPassword}>
             <div className="mb-4">
               <label htmlFor="password" className="block text-gray-700 text-sm font-medium mb-2">
@@ -235,6 +236,16 @@ function ResetPassword() {
               {loading ? 'Redefinindo...' : 'Redefinir senha'}
             </button>
           </form>
+        ) : (
+          <div className="text-center py-4">
+            <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6" role="alert">
+              <p>Esta página é exclusiva para redefinição de senha.</p>
+              <p>Por favor, use o link enviado ao seu email para redefinir a senha.</p>
+            </div>
+            <Link to="/login" className="text-primary hover:underline">
+              Voltar para a página de login
+            </Link>
+          </div>
         )}
       </div>
     </div>
