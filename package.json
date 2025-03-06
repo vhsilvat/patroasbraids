@@ -1,0 +1,36 @@
+{
+  "name": "patroasbraids",
+  "version": "1.0.0",
+  "description": "Sistema de agendamento para o salão Patroas Braids",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "agendamento",
+    "salão",
+    "tranças",
+    "cabelo",
+    "afro"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^4.0.11",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.0"
+  }
+}
