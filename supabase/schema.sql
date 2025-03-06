@@ -195,7 +195,7 @@ BEGIN
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'name', NEW.email),
-    COALESCE(NEW.raw_user_meta_data->>'role', 'client')
+    'client' -- Sempre define role como 'client' para novos usuários
   )
   ON CONFLICT (id) DO NOTHING;
   
@@ -208,6 +208,14 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+  
+-- Função para obter o ID do usuário pelo email (para uso administrativo)
+CREATE OR REPLACE FUNCTION public.get_user_id(email text)
+RETURNS TABLE (id uuid) 
+LANGUAGE sql SECURITY DEFINER
+AS $$
+  SELECT id FROM auth.users WHERE auth.users.email = email;
+$$;
 
 -- Aplicar gatilho a todas as tabelas
 CREATE TRIGGER update_profiles_updated_at
