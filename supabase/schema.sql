@@ -103,6 +103,13 @@ CREATE POLICY "Usuários podem criar seus próprios perfis"
   ON public.profiles FOR INSERT
   WITH CHECK (auth.uid() = id);
 
+CREATE POLICY "Usuários autenticados podem criar perfis ausentes"
+  ON public.profiles FOR INSERT
+  WITH CHECK (
+    auth.uid() IS NOT NULL AND
+    NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid())
+  );
+
 CREATE POLICY "Admins podem ver todos os perfis" 
   ON public.profiles FOR SELECT 
   USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));

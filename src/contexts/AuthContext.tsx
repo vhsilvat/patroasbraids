@@ -91,18 +91,50 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const fetchUserProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    
-    if (error) {
-      console.error('Error fetching user profile:', error);
-      return;
+    try {
+      // Primeiro, verificar se o perfil existe
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
+      if (error) {
+        if (error.code === 'PGRST116') {  // Perfil não encontrado
+          // Tentar criar o perfil se não existir
+          const userData = await supabase.auth.getUser();
+          
+          if (userData && userData.data && userData.data.user) {
+            const { data: newProfile, error: insertError } = await supabase
+              .from('profiles')
+              .insert([
+                {
+                  id: userId,
+                  email: userData.data.user.email,
+                  name: userData.data.user.user_metadata?.name || userData.data.user.email,
+                  role: 'client' // Perfil padrão para usuários novos
+                }
+              ])
+              .select()
+              .single();
+            
+            if (insertError) {
+              console.error('Error creating profile:', insertError);
+              return;
+            }
+            
+            setProfile(newProfile as UserProfile);
+            return;
+          }
+        }
+        console.error('Error fetching user profile:', error);
+        return;
+      }
+      
+      setProfile(data as UserProfile);
+    } catch (err) {
+      console.error('Unexpected error in fetchUserProfile:', err);
     }
-    
-    setProfile(data as UserProfile);
   };
 
   const signIn = async (email: string, password: string) => {

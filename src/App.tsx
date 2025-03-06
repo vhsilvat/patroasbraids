@@ -120,6 +120,31 @@ function ResetPassword() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   
+  // Verificar se há um hash de acesso na URL (necessário para redefinir a senha)
+  useEffect(() => {
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const accessToken = hashParams.get('access_token');
+    const refreshToken = hashParams.get('refresh_token');
+    const type = hashParams.get('type');
+    
+    // Se temos tokens na URL, vamos configurar a sessão
+    if (accessToken && type === 'recovery') {
+      const setSession = async () => {
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken || '',
+        });
+        
+        if (error) {
+          console.error('Erro ao configurar sessão:', error);
+          setError('Link de recuperação inválido ou expirado. Por favor, solicite um novo link.');
+        }
+      };
+      
+      setSession();
+    }
+  }, []);
+  
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -138,9 +163,13 @@ function ResetPassword() {
         throw error;
       }
       
+      // Se deu certo, vamos limpar o hash da URL para maior segurança
+      window.history.replaceState(null, '', window.location.pathname);
+      
       setSuccess(true);
     } catch (err: any) {
-      setError(err.message || 'Erro ao redefinir a senha');
+      console.error('Erro ao redefinir senha:', err);
+      setError(err.message || 'Erro ao redefinir a senha. Verifique se o link ainda é válido.');
     } finally {
       setLoading(false);
     }
