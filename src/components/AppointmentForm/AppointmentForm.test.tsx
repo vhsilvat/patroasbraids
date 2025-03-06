@@ -4,6 +4,37 @@ import userEvent from '@testing-library/user-event';
 import AppointmentForm from './AppointmentForm';
 import { Service } from '../../types/supabase';
 
+// Mock dos componentes internos para simplificar os testes
+jest.mock('../Calendar/Calendar', () => {
+  return function MockCalendar({ onSelectDate }: { onSelectDate: (date: Date) => void }) {
+    return (
+      <div data-testid="mock-calendar">
+        <button 
+          onClick={() => onSelectDate(new Date('2025-03-10'))}
+          data-testid="select-date-button"
+        >
+          Selecionar dia 10
+        </button>
+      </div>
+    );
+  };
+});
+
+jest.mock('../TimeSlotPicker/TimeSlotPicker', () => {
+  return function MockTimeSlotPicker({ onSelectTime }: { onSelectTime: (time: string) => void, timeSlots: any[], selectedTime: string | null }) {
+    return (
+      <div data-testid="mock-time-slot-picker">
+        <button 
+          onClick={() => onSelectTime('10:00')}
+          data-testid="select-time-button"
+        >
+          Selecionar 10:00
+        </button>
+      </div>
+    );
+  };
+});
+
 describe('AppointmentForm Component', () => {
   const mockService: Service = {
     id: 1,
@@ -24,69 +55,124 @@ describe('AppointmentForm Component', () => {
     render(<AppointmentForm onSubmit={mockSubmit} />);
     
     expect(screen.getByText('Por favor, selecione um serviço primeiro.')).toBeInTheDocument();
-    expect(screen.queryByTestId('professional-select')).not.toBeInTheDocument();
   });
 
-  test('renders form fields when service is selected', () => {
+  test('shows service information when service is selected', () => {
     render(<AppointmentForm selectedService={mockService} onSubmit={mockSubmit} />);
     
     expect(screen.queryByText('Por favor, selecione um serviço primeiro.')).not.toBeInTheDocument();
     expect(screen.getByText('Box Braids - R$ 250,00')).toBeInTheDocument();
-    expect(screen.getByTestId('professional-select')).toBeInTheDocument();
-    expect(screen.getByTestId('date-select')).toBeInTheDocument();
-    expect(screen.getByTestId('time-select')).toBeInTheDocument();
   });
 
-  test('populates professionals dropdown', () => {
+  test('starts with professional selection step', () => {
     render(<AppointmentForm selectedService={mockService} onSubmit={mockSubmit} />);
     
-    const professionalSelect = screen.getByTestId('professional-select');
-    expect(professionalSelect).toBeInTheDocument();
-    
+    expect(screen.getByText('Escolha uma profissional')).toBeInTheDocument();
     expect(screen.getByText('Ana Silva')).toBeInTheDocument();
     expect(screen.getByText('Carla Oliveira')).toBeInTheDocument();
   });
 
-  test('generates available times based on service duration', () => {
+  test('moves to date selection after selecting a professional', () => {
     render(<AppointmentForm selectedService={mockService} onSubmit={mockSubmit} />);
     
-    const timeSelect = screen.getByTestId('time-select');
-    expect(timeSelect).toBeInTheDocument();
+    // Encontra e clica no card da profissional
+    const professionalCard = screen.getByTestId('professional-card-1');
+    fireEvent.click(professionalCard);
     
-    // For a 4-hour service, the latest start time should be 14:00 (to end by 18:00)
-    expect(screen.getByText('9:00')).toBeInTheDocument();
-    expect(screen.getByText('14:00')).toBeInTheDocument();
+    // Agora devemos ver o calendário
+    expect(screen.getByTestId('mock-calendar')).toBeInTheDocument();
+    expect(screen.getByText('Escolha uma data')).toBeInTheDocument();
   });
 
-  test('submits form with appointment data when all fields are filled', async () => {
-    const user = userEvent.setup();
+  test('moves to time selection after selecting a date', async () => {
     render(<AppointmentForm selectedService={mockService} onSubmit={mockSubmit} />);
     
-    // Select professional
-    await user.selectOptions(screen.getByTestId('professional-select'), '1');
+    // Seleciona a profissional
+    const professionalCard = screen.getByTestId('professional-card-1');
+    fireEvent.click(professionalCard);
     
-    // Select date (first available date)
-    const dateSelect = screen.getByTestId('date-select');
-    await user.selectOptions(dateSelect, dateSelect.querySelector('option:not(:first-child)')!.getAttribute('value')!);
+    // Seleciona uma data no calendário mockado
+    const selectDateButton = screen.getByTestId('select-date-button');
+    fireEvent.click(selectDateButton);
     
-    // Select time (first available time)
-    const timeSelect = screen.getByTestId('time-select');
-    await user.selectOptions(timeSelect, '9:00');
+    // Agora devemos ver o seletor de horários
+    expect(screen.getByTestId('mock-time-slot-picker')).toBeInTheDocument();
+  });
+
+  test('can navigate back from date selection to professional selection', () => {
+    render(<AppointmentForm selectedService={mockService} onSubmit={mockSubmit} />);
     
-    // Submit form
-    await user.click(screen.getByText('Prosseguir para Pagamento'));
+    // Vai para seleção de data
+    const professionalCard = screen.getByTestId('professional-card-1');
+    fireEvent.click(professionalCard);
     
+    // Clica no botão voltar
+    const backButton = screen.getByText('Voltar');
+    fireEvent.click(backButton);
+    
+    // Devemos ver a seleção de profissional novamente
+    expect(screen.getByText('Escolha uma profissional')).toBeInTheDocument();
+  });
+
+  test('can navigate back from time selection to date selection', () => {
+    render(<AppointmentForm selectedService={mockService} onSubmit={mockSubmit} />);
+    
+    // Vai para seleção de data
+    const professionalCard = screen.getByTestId('professional-card-1');
+    fireEvent.click(professionalCard);
+    
+    // Vai para seleção de horário
+    const selectDateButton = screen.getByTestId('select-date-button');
+    fireEvent.click(selectDateButton);
+    
+    // Clica no botão voltar
+    const backButton = screen.getByText('Voltar');
+    fireEvent.click(backButton);
+    
+    // Devemos ver o calendário novamente
+    expect(screen.getByTestId('mock-calendar')).toBeInTheDocument();
+  });
+
+  test('completes appointment booking process', async () => {
+    render(<AppointmentForm selectedService={mockService} onSubmit={mockSubmit} />);
+    
+    // Seleciona a profissional
+    const professionalCard = screen.getByTestId('professional-card-1');
+    fireEvent.click(professionalCard);
+    
+    // Seleciona uma data
+    const selectDateButton = screen.getByTestId('select-date-button');
+    fireEvent.click(selectDateButton);
+    
+    // Seleciona um horário
+    const selectTimeButton = screen.getByTestId('select-time-button');
+    fireEvent.click(selectTimeButton);
+    
+    // Clica no botão de prosseguir para pagamento
+    const submitButton = screen.getByText('Prosseguir para Pagamento');
+    fireEvent.click(submitButton);
+    
+    // Verifica se onSubmit foi chamado com os dados corretos
     expect(mockSubmit).toHaveBeenCalledTimes(1);
-    expect(mockSubmit).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockSubmit).toHaveBeenCalledWith({
       serviceId: 1,
       professionalId: 1,
-      time: '9:00'
-    }));
+      date: '2025-03-10',
+      time: '10:00'
+    });
   });
 
-  test('disables submit button when not all fields are filled', () => {
+  test('disables submit button when time is not selected', () => {
     render(<AppointmentForm selectedService={mockService} onSubmit={mockSubmit} />);
     
+    // Navega até o seletor de horário sem selecionar um horário
+    const professionalCard = screen.getByTestId('professional-card-1');
+    fireEvent.click(professionalCard);
+    
+    const selectDateButton = screen.getByTestId('select-date-button');
+    fireEvent.click(selectDateButton);
+    
+    // O botão de envio deve estar desabilitado
     const submitButton = screen.getByText('Prosseguir para Pagamento');
     expect(submitButton).toBeDisabled();
   });

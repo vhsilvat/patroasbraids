@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Service, Professional } from '../../types/supabase';
+import Calendar from '../Calendar/Calendar';
+import TimeSlotPicker from '../TimeSlotPicker/TimeSlotPicker';
 
 interface AppointmentFormProps {
   selectedService?: Service;
@@ -13,20 +15,25 @@ interface AppointmentData {
   time: string;
 }
 
+interface TimeSlot {
+  time: string;
+  available: boolean;
+}
+
 const AppointmentForm: React.FC<AppointmentFormProps> = ({ selectedService, onSubmit }) => {
   const [professionals, setProfessionals] = useState<Professional[]>([]);
-  const [availableDates, setAvailableDates] = useState<string[]>([]);
-  const [availableTimes, setAvailableTimes] = useState<string[]>([]);
-  const [formData, setFormData] = useState<AppointmentData>({
-    serviceId: selectedService?.id || 0,
-    professionalId: 0,
-    date: '',
-    time: ''
-  });
+  const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
+  const [bookedDates, setBookedDates] = useState<Date[]>([]); // datas já reservadas
+  
+  // Estado para controlar o fluxo do formulário
+  const [step, setStep] = useState<'select-professional' | 'select-date' | 'select-time'>('select-professional');
 
-  // Load mock professionals
+  // Carregar profissionais
   useEffect(() => {
-    // In a real implementation, we would fetch from Supabase
+    // Em uma implementação real, buscaríamos do Supabase
     const mockProfessionals: Professional[] = [
       {
         id: 1,
@@ -47,65 +54,121 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ selectedService, onSu
     setProfessionals(mockProfessionals);
   }, []);
 
-  // Update service ID when selectedService changes
+  // Atualizar serviço quando selectedService mudar
   useEffect(() => {
     if (selectedService) {
-      setFormData(prev => ({ ...prev, serviceId: selectedService.id }));
+      // Resetar o formulário se o serviço mudar
+      setSelectedProfessional(null);
+      setSelectedDate(null);
+      setSelectedTime(null);
+      setStep('select-professional');
     }
   }, [selectedService]);
 
-  // Generate dates for the next 30 days
+  // Carregar datas reservadas para a profissional selecionada
   useEffect(() => {
-    const dates: string[] = [];
-    const today = new Date();
-    
-    for (let i = 1; i <= 30; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
+    if (selectedProfessional) {
+      // Em uma implementação real, buscaríamos do Supabase
+      // Aqui, estamos gerando alguns dados fictícios para demonstração
+      const mockBookedDates: Date[] = [];
+      const today = new Date();
       
-      // Format date as YYYY-MM-DD
-      const formattedDate = date.toISOString().split('T')[0];
-      dates.push(formattedDate);
+      // Adicionar algumas datas aleatórias como reservadas nos próximos 30 dias
+      for (let i = 1; i <= 5; i++) {
+        const randomDay = Math.floor(Math.random() * 30) + 1;
+        const date = new Date(today);
+        date.setDate(today.getDate() + randomDay);
+        mockBookedDates.push(date);
+      }
+      
+      setBookedDates(mockBookedDates);
     }
-    
-    setAvailableDates(dates);
-  }, []);
+  }, [selectedProfessional]);
 
-  // Generate available time slots based on selected service duration
+  // Gerar horários disponíveis com base na data e serviço selecionados
   useEffect(() => {
-    if (!selectedService) return;
+    if (!selectedService || !selectedDate) return;
     
-    const times: string[] = [];
-    const startHour = 9; // 9 AM
-    const endHour = 18; // 6 PM
+    const times: TimeSlot[] = [];
+    const startHour = 9; // 9h
+    const endHour = 18; // 18h
     const serviceDurationHours = selectedService.duration / 60;
     
-    // If service is longer than 6 hours, only show morning slots
+    // Se o serviço for mais longo que 6 horas, mostrar apenas horários da manhã
     const maxEndTime = serviceDurationHours > 6 ? 12 : endHour;
     
     for (let hour = startHour; hour <= maxEndTime - serviceDurationHours; hour++) {
-      times.push(`${hour}:00`);
+      // Hora cheia
+      times.push({
+        time: `${hour}:00`,
+        available: Math.random() > 0.3 // Aleatoriamente disponível para demonstração
+      });
+      
+      // Meia hora, se couber no intervalo
       if (hour < maxEndTime - serviceDurationHours) {
-        times.push(`${hour}:30`);
+        times.push({
+          time: `${hour}:30`,
+          available: Math.random() > 0.3
+        });
       }
     }
     
-    setAvailableTimes(times);
-  }, [selectedService]);
+    setTimeSlots(times);
+    setSelectedTime(null); // Reset do horário quando a data muda
+  }, [selectedDate, selectedService]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: name === 'serviceId' || name === 'professionalId' ? parseInt(value, 10) : value
-    }));
+  // Manipuladores de eventos
+  const handleProfessionalSelect = (professional: Professional) => {
+    setSelectedProfessional(professional);
+    setStep('select-date');
+  };
+
+  const handleDateSelect = (date: Date) => {
+    setSelectedDate(date);
+    setStep('select-time');
+  };
+
+  const handleTimeSelect = (time: string) => {
+    setSelectedTime(time);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (formData.serviceId && formData.professionalId && formData.date && formData.time) {
-      onSubmit(formData);
-    }
+    
+    if (!selectedService || !selectedProfessional || !selectedDate || !selectedTime) return;
+    
+    // Formatar a data como YYYY-MM-DD
+    const formattedDate = selectedDate.toISOString().split('T')[0];
+    
+    onSubmit({
+      serviceId: selectedService.id,
+      professionalId: selectedProfessional.id,
+      date: formattedDate,
+      time: selectedTime
+    });
+  };
+
+  const getDisabledDays = (): number[] => {
+    if (!selectedProfessional) return [0]; // Domingo desativado por padrão
+    
+    // Mapear dias de disponibilidade da profissional para números
+    // 0 = domingo, 1 = segunda, etc.
+    const availabilityMap: Record<string, number> = {
+      'sunday': 0,
+      'monday': 1,
+      'tuesday': 2,
+      'wednesday': 3,
+      'thursday': 4,
+      'friday': 5,
+      'saturday': 6
+    };
+    
+    // Inverter a lógica: obter dias que NÃO estão disponíveis
+    return [0, 1, 2, 3, 4, 5, 6].filter(day => 
+      !selectedProfessional.availability.includes(
+        Object.keys(availabilityMap).find(key => availabilityMap[key] === day) || ''
+      )
+    );
   };
 
   return (
@@ -124,90 +187,125 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ selectedService, onSu
       
       {selectedService && (
         <>
-          <div className="mb-4">
+          <div className="mb-6">
             <p className="font-medium">Serviço selecionado:</p>
             <p className="text-primary">{selectedService.name} - {selectedService.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
           </div>
           
-          <div className="mb-4">
-            <label htmlFor="professionalId" className="block mb-1 font-medium">
-              Profissional:
-            </label>
-            <select
-              id="professionalId"
-              name="professionalId"
-              value={formData.professionalId}
-              onChange={handleChange}
-              className="w-full p-2 border border-gray-300 rounded-md"
-              required
-              data-testid="professional-select"
-            >
-              <option value="">Selecione uma profissional</option>
+          {/* Etapa 1: Selecionar Profissional */}
+          <div className={`${step !== 'select-professional' ? 'hidden' : ''}`}>
+            <h3 className="text-lg font-semibold text-primary mb-3">Escolha uma profissional</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {professionals.map(professional => (
-                <option key={professional.id} value={professional.id}>
-                  {professional.name}
-                </option>
+                <div 
+                  key={professional.id}
+                  onClick={() => handleProfessionalSelect(professional)}
+                  className={`
+                    p-4 border rounded-lg cursor-pointer transition-colors
+                    ${selectedProfessional?.id === professional.id 
+                      ? 'border-primary bg-primary bg-opacity-5' 
+                      : 'border-gray-200 hover:border-primary'
+                    }
+                  `}
+                  data-testid={`professional-card-${professional.id}`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 rounded-full bg-gray-200 overflow-hidden">
+                      {professional.photo_url ? (
+                        <img 
+                          src={professional.photo_url} 
+                          alt={professional.name}
+                          className="w-full h-full object-cover" 
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zm-4 7a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="font-medium">{professional.name}</h4>
+                      <p className="text-sm text-gray-500">
+                        {professional.specialties.join(', ')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               ))}
-            </select>
+            </div>
           </div>
           
-          <div className="mb-4">
-            <label htmlFor="date" className="block mb-1 font-medium">
-              Data:
-            </label>
-            <select
-              id="date"
-              name="date"
-              value={formData.date}
-              onChange={handleChange}
-              className="w-full p-2 border border-gray-300 rounded-md"
-              required
-              data-testid="date-select"
-            >
-              <option value="">Selecione uma data</option>
-              {availableDates.map(date => {
-                // Format date for display (DD/MM/YYYY)
-                const [year, month, day] = date.split('-');
-                const displayDate = `${day}/${month}/${year}`;
-                
-                return (
-                  <option key={date} value={date}>
-                    {displayDate}
-                  </option>
-                );
-              })}
-            </select>
+          {/* Etapa 2: Selecionar Data */}
+          <div className={`${step !== 'select-date' ? 'hidden' : ''}`}>
+            <div className="mb-4 flex justify-between items-center">
+              <button 
+                type="button"
+                onClick={() => setStep('select-professional')}
+                className="flex items-center text-primary hover:underline"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                Voltar
+              </button>
+              <div>
+                <span className="font-medium">Profissional: </span>
+                <span>{selectedProfessional?.name}</span>
+              </div>
+            </div>
+            
+            <h3 className="text-lg font-semibold text-primary mb-3">Escolha uma data</h3>
+            <Calendar 
+              onSelectDate={handleDateSelect}
+              disabledDays={getDisabledDays()}
+              selectedDate={selectedDate || undefined}
+              bookedDates={bookedDates}
+            />
           </div>
           
-          <div className="mb-6">
-            <label htmlFor="time" className="block mb-1 font-medium">
-              Horário:
-            </label>
-            <select
-              id="time"
-              name="time"
-              value={formData.time}
-              onChange={handleChange}
-              className="w-full p-2 border border-gray-300 rounded-md"
-              required
-              data-testid="time-select"
-            >
-              <option value="">Selecione um horário</option>
-              {availableTimes.map(time => (
-                <option key={time} value={time}>
-                  {time}
-                </option>
-              ))}
-            </select>
+          {/* Etapa 3: Selecionar Horário */}
+          <div className={`${step !== 'select-time' ? 'hidden' : ''}`}>
+            <div className="mb-4 flex justify-between items-center">
+              <button 
+                type="button"
+                onClick={() => setStep('select-date')}
+                className="flex items-center text-primary hover:underline"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                Voltar
+              </button>
+              <div>
+                <span className="font-medium">Data: </span>
+                <span>
+                  {selectedDate?.toLocaleDateString('pt-BR', { 
+                    weekday: 'long', 
+                    day: 'numeric', 
+                    month: 'long'
+                  })}
+                </span>
+              </div>
+            </div>
+            
+            <TimeSlotPicker 
+              timeSlots={timeSlots}
+              selectedTime={selectedTime}
+              onSelectTime={handleTimeSelect}
+            />
+            
+            <div className="mt-6">
+              <button
+                type="submit"
+                className="btn btn-primary w-full"
+                disabled={!selectedTime}
+              >
+                Prosseguir para Pagamento
+              </button>
+            </div>
           </div>
-          
-          <button
-            type="submit"
-            className="btn btn-primary w-full"
-            disabled={!formData.serviceId || !formData.professionalId || !formData.date || !formData.time}
-          >
-            Prosseguir para Pagamento
-          </button>
         </>
       )}
     </form>
