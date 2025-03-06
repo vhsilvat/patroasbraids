@@ -1,12 +1,15 @@
 import { useState } from 'react'
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Link, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
+import { useAuth } from './contexts/AuthContext'
 import Header from './components/Header/Header'
 import ServiceList from './components/ServiceList/ServiceList'
 import AppointmentForm from './components/AppointmentForm/AppointmentForm'
 import { Service } from './types/supabase'
 import UserDashboard from './pages/UserDashboard'
 import AuthPage from './components/Auth/AuthPage'
+import ProtectedRoute from './components/Auth/ProtectedRoute'
+import { supabase } from './lib/supabase'
 
 function Homepage() {
   const [selectedService, setSelectedService] = useState<Service | undefined>(undefined);
@@ -38,34 +41,38 @@ function Homepage() {
         )}
         
         {appointmentStep === 'schedule' && (
-          <div className="max-w-2xl mx-auto">
-            <h2 className="text-3xl font-bold text-primary mb-6">Agendar Horário</h2>
-            <div className="mb-4">
-              <button 
-                onClick={() => setAppointmentStep('select-service')}
-                className="text-primary hover:underline"
-              >
-                ← Voltar para serviços
-              </button>
+          <ProtectedRoute>
+            <div className="max-w-2xl mx-auto">
+              <h2 className="text-3xl font-bold text-primary mb-6">Agendar Horário</h2>
+              <div className="mb-4">
+                <button 
+                  onClick={() => setAppointmentStep('select-service')}
+                  className="text-primary hover:underline"
+                >
+                  ← Voltar para serviços
+                </button>
+              </div>
+              <AppointmentForm 
+                selectedService={selectedService} 
+                onSubmit={handleAppointmentSubmit} 
+              />
             </div>
-            <AppointmentForm 
-              selectedService={selectedService} 
-              onSubmit={handleAppointmentSubmit} 
-            />
-          </div>
+          </ProtectedRoute>
         )}
         
         {appointmentStep === 'payment' && (
-          <div className="max-w-2xl mx-auto text-center">
-            <h2 className="text-3xl font-bold text-primary mb-6">Pagamento</h2>
-            <p className="mb-4">Esta seção será implementada em breve com integração ao Mercado Pago.</p>
-            <button 
-              onClick={() => setAppointmentStep('select-service')}
-              className="btn btn-primary"
-            >
-              Voltar ao Início
-            </button>
-          </div>
+          <ProtectedRoute>
+            <div className="max-w-2xl mx-auto text-center">
+              <h2 className="text-3xl font-bold text-primary mb-6">Pagamento</h2>
+              <p className="mb-4">Esta seção será implementada em breve com integração ao Mercado Pago.</p>
+              <button 
+                onClick={() => setAppointmentStep('select-service')}
+                className="btn btn-primary"
+              >
+                Voltar ao Início
+              </button>
+            </div>
+          </ProtectedRoute>
         )}
       </main>
       
@@ -90,14 +97,139 @@ function Homepage() {
   )
 }
 
+// Componente para proteger rotas de usuário
+function PrivateRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+  
+  return user ? <>{children}</> : <Navigate to="/login" />;
+}
+
+// Componente para redefinição de senha
+function ResetPassword() {
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (password !== confirmPassword) {
+      setError('As senhas não coincidem');
+      return;
+    }
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      
+      if (error) {
+        throw error;
+      }
+      
+      setSuccess(true);
+    } catch (err: any) {
+      setError(err.message || 'Erro ao redefinir a senha');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
+      <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full">
+        <h2 className="text-2xl font-bold text-primary mb-6 text-center">Redefinir Senha</h2>
+        
+        {error && (
+          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" role="alert">
+            <p>{error}</p>
+          </div>
+        )}
+        
+        {success ? (
+          <div className="text-center">
+            <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6" role="alert">
+              <p>Senha redefinida com sucesso!</p>
+            </div>
+            <Link to="/login" className="btn btn-primary">
+              Ir para o login
+            </Link>
+          </div>
+        ) : (
+          <form onSubmit={handleResetPassword}>
+            <div className="mb-4">
+              <label htmlFor="password" className="block text-gray-700 text-sm font-medium mb-2">
+                Nova senha
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                required
+                minLength={6}
+              />
+            </div>
+            
+            <div className="mb-6">
+              <label htmlFor="confirmPassword" className="block text-gray-700 text-sm font-medium mb-2">
+                Confirmar nova senha
+              </label>
+              <input
+                id="confirmPassword"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                required
+                minLength={6}
+              />
+            </div>
+            
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full btn btn-primary"
+            >
+              {loading ? 'Redefinindo...' : 'Redefinir senha'}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Homepage />} />
-          <Route path="/conta" element={<UserDashboard />} />
+          <Route path="/conta" element={
+            <PrivateRoute>
+              <UserDashboard />
+            </PrivateRoute>
+          } />
           <Route path="/login" element={<AuthPage />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/agendamento" element={
+            <PrivateRoute>
+              <Homepage />
+            </PrivateRoute>
+          } />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

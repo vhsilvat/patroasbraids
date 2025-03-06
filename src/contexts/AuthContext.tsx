@@ -19,12 +19,15 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any | null }>;
+  signInWithOAuth: (provider: 'google' | 'azure') => Promise<{ error: any | null }>;
   signUp: (email: string, password: string, userData: Partial<UserProfile>) => Promise<{ 
     error: any | null, 
     user: User | null,
     needsEmailConfirmation?: boolean 
   }>;
   signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<{ error: any | null }>;
+  updatePassword: (password: string) => Promise<{ error: any | null }>;
   updateProfile: (data: Partial<UserProfile>) => Promise<{ error: any | null }>;
   isAdmin: () => boolean;
   isProfessional: () => boolean;
@@ -106,6 +109,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error };
   };
+  
+  const signInWithOAuth = async (provider: 'google' | 'azure') => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${window.location.origin}/conta`
+      }
+    });
+    return { error };
+  };
 
   const signUp = async (email: string, password: string, userData: Partial<UserProfile>) => {
     // First create the auth user - always set role to 'client'
@@ -144,6 +157,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const signOut = async () => {
     await supabase.auth.signOut();
   };
+  
+  const resetPassword = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    return { error };
+  };
+  
+  const updatePassword = async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    return { error };
+  };
 
   const updateProfile = async (data: Partial<UserProfile>) => {
     if (!user) {
@@ -173,8 +198,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     session,
     loading,
     signIn,
+    signInWithOAuth,
     signUp,
     signOut,
+    resetPassword,
+    updatePassword,
     updateProfile,
     isAdmin,
     isProfessional,
