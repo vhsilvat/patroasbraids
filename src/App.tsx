@@ -1,10 +1,14 @@
 import { useState } from 'react'
+import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
+import { AuthProvider } from './contexts/AuthContext'
 import Header from './components/Header/Header'
 import ServiceList from './components/ServiceList/ServiceList'
 import AppointmentForm from './components/AppointmentForm/AppointmentForm'
 import { Service } from './types/supabase'
+import UserDashboard from './pages/UserDashboard'
+import AuthPage from './components/Auth/AuthPage'
 
-function App() {
+function Homepage() {
   const [selectedService, setSelectedService] = useState<Service | undefined>(undefined);
   const [appointmentStep, setAppointmentStep] = useState<'select-service' | 'schedule' | 'payment'>('select-service');
 
@@ -73,13 +77,30 @@ function App() {
               <p className="text-sm">Especialistas em cabelos afro e tranças</p>
             </div>
             
-            <div className="mt-4 md:mt-0">
-              <p className="text-sm">&copy; {new Date().getFullYear()} Patroas Braids. Todos os direitos reservados.</p>
+            <div className="flex items-center space-x-6 mt-4 md:mt-0">
+              <Link to="/conta" className="text-white hover:text-secondary transition-colors">
+                Minha Conta
+              </Link>
+              <p className="text-sm">&copy; {new Date().getFullYear()} Patroas Braids</p>
             </div>
           </div>
         </div>
       </footer>
     </div>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Homepage />} />
+          <Route path="/conta" element={<UserDashboard />} />
+          <Route path="/login" element={<AuthPage />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   )
 }
 
