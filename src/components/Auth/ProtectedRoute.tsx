@@ -12,7 +12,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   allowedRoles = [] 
 }) => {
   const { user, profile, loading } = useAuth();
-
+  
+  // Mostrar loading apenas durante a inicialização da auth
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -21,13 +22,36 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
-  // Não autenticado - mostra página de login
+  // Se não tem usuário, exibe página de login
   if (!user) {
+    // Salva URL atual para redirecionamento após login
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('redirectUrl', window.location.pathname + window.location.search);
+    }
     return <AuthPage />;
   }
 
-  // Se roles específicas são requeridas e o usuário não tem a role necessária
-  if (allowedRoles.length > 0 && profile && !allowedRoles.includes(profile.role)) {
+  // Se temos usuário mas não temos perfil (situação que não deveria ocorrer com a nova implementação)
+  if (!profile) {
+    console.error("Estado inválido: usuário autenticado sem perfil");
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full text-center">
+          <h2 className="text-xl font-bold text-red-600 mb-4">Erro de autenticação</h2>
+          <p className="mb-4">Ocorreu um erro ao carregar seu perfil. Tente fazer login novamente.</p>
+          <button 
+            onClick={() => window.location.href = '/login'}
+            className="px-4 py-2 bg-primary text-white rounded-md"
+          >
+            Voltar para login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Verificação de permissões baseada em papel
+  if (allowedRoles.length > 0 && !allowedRoles.includes(profile.role)) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full text-center">
@@ -45,7 +69,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
-  // Usuário autenticado com as permissões corretas
+  // Tudo ok, renderiza o conteúdo protegido
   return <>{children}</>;
 };
 

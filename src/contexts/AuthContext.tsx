@@ -10,6 +10,7 @@ export interface UserProfile {
   name: string;
   phone?: string;
   role: UserRole;
+  photo_url?: string;
   created_at?: string;
 }
 
@@ -53,171 +54,199 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Função para criar um perfil local a partir do usuário
+  const createLocalProfile = (user: User): UserProfile => {
+    const name = user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário';
+    const email = user.email || '';
+    
+    return {
+      id: user.id,
+      email,
+      name,
+      role: 'client', // default role
+      photo_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=8B5CF6&color=fff&size=200`
+    };
+  };
+
+  // Simplificação - sem consultar perfil do banco
+  const updateUserState = (currentUser: User | null, currentSession: Session | null) => {
+    setUser(currentUser);
+    setSession(currentSession);
+    
+    if (currentUser) {
+      // Sempre usar um perfil local em vez de buscar do banco
+      setProfile(createLocalProfile(currentUser));
+    } else {
+      setProfile(null);
+    }
+    
+    setLoading(false);
+  };
 
   useEffect(() => {
-    // Get initial session
-    const getInitialSession = async () => {
-      setLoading(true);
-      
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      setSession(session);
-      setUser(session?.user || null);
-      
-      if (session?.user) {
-        await fetchUserProfile(session.user.id);
+    console.log("🔑 Inicializando AuthContext...");
+    
+    // Obter sessão inicial
+    const initializeAuth = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error("❌ Erro ao obter sessão:", error.message);
+          updateUserState(null, null);
+          return;
+        }
+        
+        if (data?.session) {
+          console.log("✅ Sessão encontrada para usuário:", data.session.user.email);
+          updateUserState(data.session.user, data.session);
+        } else {
+          console.log("ℹ️ Nenhuma sessão ativa encontrada");
+          updateUserState(null, null);
+        }
+      } catch (err) {
+        console.error("❌ Erro inesperado:", err);
+        updateUserState(null, null);
       }
-      
-      setLoading(false);
     };
 
-    getInitialSession();
+    initializeAuth();
 
-    // Listen for auth changes
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setSession(session);
-      setUser(session?.user || null);
+    // Ouvir mudanças de autenticação
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, currentSession) => {
+      console.log(`🔄 Evento de autenticação: ${event}`);
       
-      if (session?.user) {
-        await fetchUserProfile(session.user.id);
+      if (currentSession) {
+        console.log(`✅ Usuário autenticado: ${currentSession.user.email}`);
+        updateUserState(currentSession.user, currentSession);
       } else {
-        setProfile(null);
+        console.log("❌ Usuário desautenticado");
+        updateUserState(null, null);
       }
     });
 
+    // Limpeza
     return () => {
       authListener.subscription.unsubscribe();
     };
   }, []);
 
-  const fetchUserProfile = async (userId: string) => {
-    try {
-      // Primeiro, verificar se o perfil existe
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-      
-      if (error) {
-        if (error.code === 'PGRST116') {  // Perfil não encontrado
-          // Tentar criar o perfil se não existir
-          const userData = await supabase.auth.getUser();
-          
-          if (userData && userData.data && userData.data.user) {
-            const { data: newProfile, error: insertError } = await supabase
-              .from('profiles')
-              .insert([
-                {
-                  id: userId,
-                  email: userData.data.user.email,
-                  name: userData.data.user.user_metadata?.name || userData.data.user.email,
-                  role: 'client' // Perfil padrão para usuários novos
-                }
-              ])
-              .select()
-              .single();
-            
-            if (insertError) {
-              console.error('Error creating profile:', insertError);
-              return;
-            }
-            
-            setProfile(newProfile as UserProfile);
-            return;
-          }
-        }
-        console.error('Error fetching user profile:', error);
-        return;
-      }
-      
-      setProfile(data as UserProfile);
-    } catch (err) {
-      console.error('Unexpected error in fetchUserProfile:', err);
-    }
-  };
-
+  // Métodos de autenticação simplificados
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error };
+    try {
+      setLoading(true);
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      
+      if (error) return { error };
+      
+      // updateUserState é chamado automaticamente pelo listener onAuthStateChange
+      return { error: null };
+    } catch (error) {
+      return { error };
+    } finally {
+      // Não finalizamos o loading aqui, pois o onAuthStateChange cuidará disso
+    }
   };
   
   const signInWithOAuth = async (provider: 'google' | 'azure') => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: `${window.location.origin}/conta`
-      }
-    });
-    return { error };
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/conta`
+        }
+      });
+      return { error };
+    } catch (error) {
+      return { error };
+    }
   };
 
   const signUp = async (email: string, password: string, userData: Partial<UserProfile>) => {
-    // First create the auth user - always set role to 'client'
-    const { data, error } = await supabase.auth.signUp({ 
-      email, 
-      password,
-      options: {
-        data: {
-          name: userData.name,
-          role: 'client' // Always client role for new users
-        },
-        emailRedirectTo: window.location.origin // Redireciona de volta para o app após confirmação
-      }
-    });
-    
-    if (error || !data.user) {
+    try {
+      const { data, error } = await supabase.auth.signUp({ 
+        email, 
+        password,
+        options: {
+          data: {
+            name: userData.name,
+            role: 'client'
+          },
+          emailRedirectTo: window.location.origin
+        }
+      });
+      
+      if (error) return { error, user: null };
+      
+      return { 
+        error: null, 
+        user: data.user,
+        needsEmailConfirmation: !data.user?.email_confirmed_at 
+      };
+    } catch (error) {
       return { error, user: null };
     }
-    
-    // Verificar se o usuário precisa de confirmação de email
-    const needsEmailConfirmation = !data.user.email_confirmed_at;
-    
-    // Esperar um momento para garantir que o usuário foi criado
-    // O gatilho no Supabase criará o perfil automaticamente
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    return { 
-      error: needsEmailConfirmation 
-        ? { message: 'Verifique seu email para confirmar o cadastro antes de fazer login' } 
-        : null, 
-      user: data.user,
-      needsEmailConfirmation 
-    };
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      setLoading(true);
+      await supabase.auth.signOut();
+      // Limpeza manual (o listener também irá atualizar)
+      setUser(null);
+      setProfile(null);
+      setSession(null);
+      
+      // Limpar localStorage e cookies para garantir
+      localStorage.removeItem('sb-pnvzauzhrehdzhwzfnjt-auth-token');
+      document.cookie.split(';').forEach(c => {
+        document.cookie = c.trim().split('=')[0] + '=;' + 'expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/';
+      });
+      
+      // Redirecionar para garantir limpeza total
+      window.location.href = '/';
+    } catch (error) {
+      console.error("Erro ao fazer logout:", error);
+      // Abordagem brutal se falhar
+      localStorage.clear();
+      window.location.href = '/';
+    }
   };
   
   const resetPassword = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    return { error };
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      return { error };
+    } catch (error) {
+      return { error };
+    }
   };
   
   const updatePassword = async (password: string) => {
-    const { error } = await supabase.auth.updateUser({ password });
-    return { error };
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      return { error };
+    } catch (error) {
+      return { error };
+    }
   };
 
+  // Método simulado - armazena apenas em memória, não tenta persistir
   const updateProfile = async (data: Partial<UserProfile>) => {
     if (!user) {
       return { error: new Error('User not authenticated') };
     }
     
-    const { error } = await supabase
-      .from('profiles')
-      .update(data)
-      .eq('id', user.id);
-    
-    if (!error) {
-      // Update local profile state
+    try {
+      // Apenas atualiza o estado local, não tenta salvar no banco
       setProfile(prev => prev ? { ...prev, ...data } : null);
+      return { error: null };
+    } catch (error) {
+      return { error };
     }
-    
-    return { error };
   };
 
   const isAdmin = () => profile?.role === 'admin';

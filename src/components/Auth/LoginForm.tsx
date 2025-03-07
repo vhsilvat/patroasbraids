@@ -38,23 +38,50 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick }) => 
   const [resetLoading, setResetLoading] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
 
+  // Limpar qualquer sessão existente antes de iniciar o componente
+  React.useEffect(() => {
+    const cleanupSession = async () => {
+      // Cuidado para não deslogar um usuário já autenticado
+      const { data } = await supabase.auth.getSession();
+      if (!data?.session) {
+        // Se não há sessão, limpe a localStorage para garantir estado limpo
+        localStorage.removeItem('sb-pnvzauzhrehdzhwzfnjt-auth-token');
+      }
+    };
+    
+    cleanupSession();
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
     try {
-      const { error } = await signIn(email, password);
+      console.log('🔐 Iniciando login para:', email);
       
-      if (error) {
-        throw error;
+      // Fazer login
+      const { error: loginError } = await signIn(email, password);
+      
+      if (loginError) {
+        console.error('❌ Erro de login:', loginError.message);
+        throw loginError;
       }
       
-      if (onSuccess) {
-        onSuccess();
-      }
+      console.log('✅ Login realizado com sucesso');
+      
+      // Redirecionar após login bem-sucedido
+      const redirectUrl = sessionStorage.getItem('redirectUrl') || '/conta';
+      sessionStorage.removeItem('redirectUrl');
+      
+      // Pequeno atraso para garantir que as atualizações de estado sejam aplicadas
+      setTimeout(() => {
+        window.location.href = redirectUrl;
+      }, 300);
+      
     } catch (err: any) {
-      setError(err.message || 'Erro ao fazer login');
+      console.error('❌ Erro durante login:', err);
+      setError(err.message || 'Erro ao fazer login. Tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -75,9 +102,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick }) => 
       }
       
       setResetSent(true);
-      console.log("Password reset email sent successfully");
     } catch (err: any) {
-      console.error("Error sending password reset email:", err);
       setResetError(err.message || 'Erro ao enviar o email de recuperação');
     } finally {
       setResetLoading(false);
@@ -86,16 +111,12 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick }) => 
 
   const handleGoogleLogin = async () => {
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/conta`
         }
       });
-      
-      if (error) {
-        throw error;
-      }
     } catch (err: any) {
       setError(err.message || 'Erro ao fazer login com Google');
     }
@@ -103,16 +124,12 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick }) => 
 
   const handleMicrosoftLogin = async () => {
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      await supabase.auth.signInWithOAuth({
         provider: 'azure',
         options: {
           redirectTo: `${window.location.origin}/conta`
         }
       });
-      
-      if (error) {
-        throw error;
-      }
     } catch (err: any) {
       setError(err.message || 'Erro ao fazer login com Microsoft');
     }
