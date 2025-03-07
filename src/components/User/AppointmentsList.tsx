@@ -267,8 +267,8 @@ const AppointmentsList: React.FC = () => {
                     <button
                       className="btn btn-primary"
                       onClick={() => {
-                        // Integração com pagamento - Mock para demonstração
-                        alert('Redirecionando para o Mercado Pago...');
+                        // Redirecionar para a página de pagamento
+                        window.location.href = `/pagamento/${appointment.id}`;
                       }}
                     >
                       Efetuar Pagamento
