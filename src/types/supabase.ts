@@ -36,9 +36,9 @@ export type Appointment = {
   appointment_date: string // YYYY-MM-DD
   appointment_time: string // HH:MM
   status: 'pending' | 'confirmed' | 'completed' | 'cancelled'
-  payment_id?: number
   notes?: string
   created_at?: string
+  // payment_id removido - agora as tabelas têm relação na direção oposta
 }
 
 export type User = {

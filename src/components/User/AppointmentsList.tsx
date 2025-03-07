@@ -6,7 +6,7 @@ import { Appointment, Service, Professional, Payment } from '../../types/supabas
 interface ExtendedAppointment extends Appointment {
   service: Service;
   professional: Pick<Professional, 'id' | 'name'>;
-  payment?: Payment;
+  payment?: Payment[]; // Agora é um array de pagamentos
 }
 
 const AppointmentsList: React.FC = () => {
@@ -15,6 +15,7 @@ const AppointmentsList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming');
+  const [hasCheckedAppointments, setHasCheckedAppointments] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -34,7 +35,7 @@ const AppointmentsList: React.FC = () => {
           *,
           service:service_id(*),
           professional:professional_id(id, name),
-          payment:payment_id(*)
+          payment:payments(*)
         `)
         .eq('user_id', user?.id)
         .order('appointment_date', { ascending: true })
@@ -44,7 +45,9 @@ const AppointmentsList: React.FC = () => {
         throw error;
       }
 
-      setAppointments(data as ExtendedAppointment[]);
+      // Se a resposta for vazia, definir como array vazio
+      setAppointments(data || []);
+      setHasCheckedAppointments(true);
     } catch (err: any) {
       console.error('Erro ao buscar agendamentos:', err);
       setError('Não foi possível carregar seus agendamentos. Tente novamente mais tarde.');
@@ -77,13 +80,16 @@ const AppointmentsList: React.FC = () => {
   };
 
   // Obter o status label colorido
-  const getStatusBadge = (status: string, payment?: Payment) => {
+  const getStatusBadge = (status: string, payments?: Payment[]) => {
     let bgColor = 'bg-gray-100';
     let textColor = 'text-gray-800';
     let label = 'Desconhecido';
 
-    // Se o pagamento estiver pendente, o status também é pendente
-    if (payment && payment.status === 'pending') {
+    // Se houver pagamentos e pelo menos um estiver pendente, o status é pendente
+    const hasPendingPayment = payments && payments.length > 0 && 
+      payments.some(payment => payment.status === 'pending');
+    
+    if (hasPendingPayment) {
       status = 'pending';
     }
 
@@ -120,6 +126,18 @@ const AppointmentsList: React.FC = () => {
   // Formatação do horário
   const formatTime = (timeString: string): string => {
     return timeString.substring(0, 5); // Exibir apenas HH:MM
+  };
+
+  // Calcular horário de término do serviço
+  const getEndTime = (startTime: string, durationMinutes: number): string => {
+    const [hours, minutes] = startTime.split(':').map(Number);
+    
+    const startDate = new Date();
+    startDate.setHours(hours, minutes, 0);
+    
+    const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
+    
+    return `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`;
   };
 
   return (
@@ -170,7 +188,7 @@ const AppointmentsList: React.FC = () => {
         <div className="flex justify-center items-center py-8">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
         </div>
-      ) : filteredAppointments.length === 0 ? (
+      ) : hasCheckedAppointments && filteredAppointments.length === 0 ? (
         <div className="text-center py-8 text-gray-500">
           <svg
             className="mx-auto h-12 w-12 text-gray-400"
@@ -206,7 +224,7 @@ const AppointmentsList: React.FC = () => {
                     {formatDate(appointment.appointment_date)}
                   </p>
                   <p className="text-gray-600 text-sm">
-                    {formatTime(appointment.appointment_time)}
+                    {formatTime(appointment.appointment_time)} - {getEndTime(appointment.appointment_time, appointment.service.duration)}
                   </p>
                 </div>
                 <div>
@@ -241,7 +259,10 @@ const AppointmentsList: React.FC = () => {
                 </div>
                 
                 {/* Se o status for pendente, mostrar botões de ação */}
-                {(appointment.status === 'pending' || (appointment.payment && appointment.payment.status === 'pending')) && (
+                {(appointment.status === 'pending' || 
+                  (appointment.payment && 
+                  appointment.payment.length > 0 && 
+                  appointment.payment.some(p => p.status === 'pending'))) && (
                   <div className="mt-4 pt-4 border-t border-gray-200 flex justify-end">
                     <button
                       className="btn btn-primary"
