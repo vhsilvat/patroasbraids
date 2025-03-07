@@ -23,9 +23,8 @@ function Homepage() {
 
   const handleAppointmentSubmit = (appointmentData: any) => {
     console.log('Appointment submitted:', appointmentData);
-    setAppointmentStep('payment');
-    // In a real implementation, we would process the appointment and redirect to payment
-    alert('Você será redirecionado para a página de pagamento (implementação futura)');
+    // O redirecionamento já está sendo feito pelo AppointmentForm
+    // Não precisamos fazer nada aqui, apenas manter para compatibilidade
   };
 
   return (
@@ -61,20 +60,7 @@ function Homepage() {
           </ProtectedRoute>
         )}
         
-        {appointmentStep === 'payment' && (
-          <ProtectedRoute>
-            <div className="max-w-2xl mx-auto text-center">
-              <h2 className="text-3xl font-bold text-primary mb-6">Pagamento</h2>
-              <p className="mb-4">Esta seção será implementada em breve com integração ao Mercado Pago.</p>
-              <button 
-                onClick={() => setAppointmentStep('select-service')}
-                className="btn btn-primary"
-              >
-                Voltar ao Início
-              </button>
-            </div>
-          </ProtectedRoute>
-        )}
+        {/* O fluxo de pagamento agora acontece em uma página separada */}
       </main>
       
       <footer className="bg-primary text-white py-6">

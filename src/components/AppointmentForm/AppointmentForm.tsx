@@ -3,8 +3,10 @@ import { Service, Professional, ProfessionalAvailability, Appointment } from '..
 import Calendar from '../Calendar/Calendar';
 import TimeSlotPicker from '../TimeSlotPicker/TimeSlotPicker';
 import { useAuth } from '../../contexts/AuthContext';
-import { getProfessionals, getProfessionalAvailability, getAppointmentsForDateRange } from '../../lib/services';
+import { useNavigate } from 'react-router-dom';
+import { getProfessionals, getProfessionalAvailability, getAppointmentsForDateRange, createAppointment } from '../../lib/services';
 import { createPaymentPreference } from '../../lib/mercadopago';
+import { supabase } from '../../lib/supabase';
 
 interface AppointmentFormProps {
   selectedService?: Service;
@@ -25,6 +27,7 @@ interface TimeSlot {
 
 const AppointmentForm: React.FC<AppointmentFormProps> = ({ selectedService, onSubmit }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -44,14 +47,29 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ selectedService, onSu
       setError(null);
       
       try {
-        const { data, error } = await getProfessionals();
+        // Consultar diretamente sem complexidade
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, name, email, role, photo_url')
+          .eq('role', 'professional');
         
         if (error) {
           throw new Error(error.message);
         }
         
-        if (data) {
-          setProfessionals(data);
+        if (data && Array.isArray(data)) {
+          // Converter para o formato esperado
+          const enhancedData = data.map(prof => ({
+            ...prof,
+            user_id: prof.id,
+            specialties: [],
+            photo_url: prof.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(prof.name)}&background=8B5CF6&color=fff&size=200`
+          }));
+          
+          setProfessionals(enhancedData);
+        } else {
+          // Em caso de dados vazios, evitar exibir erro
+          setProfessionals([]);
         }
       } catch (err: any) {
         console.error("Erro ao carregar profissionais:", err);
@@ -291,16 +309,35 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ selectedService, onSu
       // Formatar a data como YYYY-MM-DD
       const formattedDate = selectedDate.toISOString().split('T')[0];
       
-      // Preparar dados do agendamento
+      // Criar agendamento diretamente no banco de dados
       const appointmentData = {
+        user_id: user.id,
+        professional_id: selectedProfessional.id,
+        service_id: selectedService.id,
+        appointment_date: formattedDate,
+        appointment_time: selectedTime,
+        status: 'pending'
+      };
+      
+      // Criar o agendamento no Supabase
+      const { data: newAppointment, error: appointmentError } = await createAppointment(appointmentData);
+      
+      if (appointmentError || !newAppointment) {
+        throw new Error(appointmentError?.message || 'Erro ao criar agendamento');
+      }
+      
+      console.log('Agendamento criado com sucesso:', newAppointment.id);
+      
+      // Também chamar o callback para manter compatibilidade
+      onSubmit({
         serviceId: selectedService.id,
         professionalId: selectedProfessional.id,
         date: formattedDate,
         time: selectedTime
-      };
+      });
       
-      // Chamar callback para criar o agendamento e processar o pagamento
-      onSubmit(appointmentData);
+      // Redirecionar para a página de pagamento
+      navigate(`/pagamento/${newAppointment.id}`);
       
     } catch (err: any) {
       console.error("Erro ao processar agendamento:", err);
