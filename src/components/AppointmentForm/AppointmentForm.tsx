@@ -309,7 +309,35 @@ const AppointmentForm: React.FC<AppointmentFormProps> = ({ selectedService, onSu
       // Formatar a data como YYYY-MM-DD
       const formattedDate = selectedDate.toISOString().split('T')[0];
       
-      // Criar agendamento diretamente no banco de dados
+      // 1. Primeiro, verificar se o perfil existe no banco de dados
+      const { data: existingProfile, error: profileCheckError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .single();
+        
+      // 2. Se não existir, criar um perfil no banco de dados
+      if (!existingProfile || profileCheckError) {
+        console.log('Perfil não encontrado, criando novo perfil...');
+        const { error: createProfileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: user.id,
+            email: user.email || '',
+            name: user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário',
+            role: 'client',
+            photo_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(user.user_metadata?.name || user.email || 'User')}&background=8B5CF6&color=fff&size=200`
+          });
+          
+        if (createProfileError) {
+          console.error('Erro ao criar perfil:', createProfileError);
+          throw new Error('Não foi possível criar seu perfil de usuário');
+        }
+        
+        console.log('Perfil criado com sucesso');
+      }
+      
+      // 3. Criar agendamento agora que temos certeza que o perfil existe
       const appointmentData = {
         user_id: user.id,
         professional_id: selectedProfessional.id,
