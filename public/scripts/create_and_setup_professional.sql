@@ -31,7 +31,7 @@ CREATE POLICY "Edição de especialidades apenas por admin ou próprio"
 -- Parte 2: Verificar e criar perfil para o usuário se necessário
 DO $$
 DECLARE
-    professional_id UUID := 'afcb5388-6744-4436-9d32-b1503b933fd8';
+    target_user_id UUID := 'afcb5388-6744-4436-9d32-b1503b933fd8';
     user_email TEXT;
     user_name TEXT;
     profile_exists BOOLEAN;
@@ -40,10 +40,10 @@ BEGIN
     SELECT email, raw_user_meta_data->>'name' 
     INTO user_email, user_name
     FROM auth.users 
-    WHERE id = professional_id;
+    WHERE id = target_user_id;
     
     IF user_email IS NULL THEN
-        RAISE EXCEPTION 'Usuário com ID % não existe na tabela auth.users', professional_id;
+        RAISE EXCEPTION 'Usuário com ID % não existe na tabela auth.users', target_user_id;
     END IF;
     
     -- Se não havia name nos metadados, usar email como nome
@@ -52,12 +52,12 @@ BEGIN
     END IF;
     
     -- 2. Verificar se o perfil já existe
-    SELECT EXISTS(SELECT 1 FROM public.profiles WHERE id = professional_id) INTO profile_exists;
+    SELECT EXISTS(SELECT 1 FROM public.profiles WHERE id = target_user_id) INTO profile_exists;
     
     -- 3. Criar perfil se não existir
     IF NOT profile_exists THEN
         INSERT INTO public.profiles (id, email, name, role) 
-        VALUES (professional_id, user_email, user_name, 'client');
+        VALUES (target_user_id, user_email, user_name, 'client');
         RAISE NOTICE 'Perfil criado para o usuário % com email %', user_name, user_email;
     END IF;
 END $$;
@@ -65,14 +65,14 @@ END $$;
 -- Parte 3: Configurar o usuário como profissional
 DO $$
 DECLARE
-    professional_id UUID := 'afcb5388-6744-4436-9d32-b1503b933fd8';
+    target_user_id UUID := 'afcb5388-6744-4436-9d32-b1503b933fd8';
     professional_name TEXT;
     professional_email TEXT;
 BEGIN
     -- 1. Atualizar o perfil para role 'professional'
     UPDATE public.profiles
     SET role = 'professional'
-    WHERE id = professional_id
+    WHERE id = target_user_id
     RETURNING name, email INTO professional_name, professional_email;
     
     RAISE NOTICE 'Usuário % (%) atualizado para a role de profissional', professional_name, professional_email;
@@ -91,11 +91,11 @@ BEGIN
         '{role}',
         concat('"professional"')::jsonb
       )
-    WHERE id = professional_id;
+    WHERE id = target_user_id;
     
     -- 3. Limpar qualquer disponibilidade existente para evitar duplicações
     DELETE FROM public.professional_availability
-    WHERE professional_id = professional_id;
+    WHERE professional_id = target_user_id;
     
     -- 4. Inserir disponibilidade para dias úteis (1-5: Segunda a Sexta)
     -- Horário comercial: 9h às 18h
@@ -103,26 +103,26 @@ BEGIN
         INSERT INTO public.professional_availability
             (professional_id, day_of_week, start_time, end_time, is_available)
         VALUES
-            (professional_id, day_num, '09:00:00', '18:00:00', TRUE);
+            (target_user_id, day_num, '09:00:00', '18:00:00', TRUE);
     END LOOP;
     
     -- 5. Inserir disponibilidade para sábado: meio período (9h às 13h)
     INSERT INTO public.professional_availability
         (professional_id, day_of_week, start_time, end_time, is_available)
     VALUES
-        (professional_id, 6, '09:00:00', '13:00:00', TRUE);
+        (target_user_id, 6, '09:00:00', '13:00:00', TRUE);
     
     -- 6. Adicionar todas as especialidades para o profissional
     DELETE FROM public.professional_specialties
-    WHERE professional_id = professional_id;
+    WHERE professional_id = target_user_id;
     
     -- Adicionar todos os serviços como especialidades
     INSERT INTO public.professional_specialties (professional_id, service_id)
-    SELECT professional_id, id 
+    SELECT target_user_id, id 
     FROM public.services;
     
     RAISE NOTICE 'Configuração concluída para o profissional %', professional_name;
-    RAISE NOTICE 'ID: %, Role: professional', professional_id;
+    RAISE NOTICE 'ID: %, Role: professional', target_user_id;
     RAISE NOTICE 'Disponibilidade configurada para horário comercial (9h-18h seg-sex, 9h-13h sáb)';
     RAISE NOTICE 'Todas as especialidades/serviços foram atribuídos a este profissional';
 END $$;
