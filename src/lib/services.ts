@@ -186,14 +186,61 @@ export async function createAppointment(appointment: Omit<Appointment, 'id' | 'c
 }
 
 export async function updateAppointmentStatus(id: number, status: Appointment['status']): Promise<ApiResponse<Appointment>> {
-  const { data, error } = await supabase
-    .from('appointments')
-    .update({ status })
-    .eq('id', id)
-    .select()
-    .single();
-
-  return { data, error };
+  try {
+    console.log(`Atualizando status do agendamento ${id} para ${status}`);
+    
+    if (!id || id <= 0) {
+      console.error('ID de agendamento inválido:', id);
+      return { 
+        data: null, 
+        error: new Error(`ID de agendamento inválido: ${id}`) 
+      };
+    }
+    
+    // Atualizar o agendamento
+    const { data, error } = await supabase
+      .from('appointments')
+      .update({ status })
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error(`Erro ao atualizar agendamento ${id}:`, error);
+      
+      // Tentativa alternativa sem o .select() e .single()
+      if (error.code === '406') {
+        console.log('Tentando método alternativo de atualização...');
+        const { error: updateError } = await supabase
+          .from('appointments')
+          .update({ status })
+          .eq('id', id);
+          
+        if (!updateError) {
+          console.log('Agendamento atualizado com sucesso (método alternativo)');
+          // Buscar o agendamento atualizado
+          const { data: fetchedData } = await supabase
+            .from('appointments')
+            .select('*')
+            .eq('id', id)
+            .single();
+            
+          return { data: fetchedData, error: null };
+        } else {
+          console.error('Erro no método alternativo:', updateError);
+          return { data: null, error: updateError };
+        }
+      }
+      
+      return { data: null, error };
+    }
+    
+    console.log('Agendamento atualizado com sucesso:', data);
+    return { data, error };
+  } catch (err) {
+    console.error('Erro inesperado ao atualizar agendamento:', err);
+    return { data: null, error: err as Error };
+  }
 }
 
 // Pagamentos
@@ -255,11 +302,22 @@ export async function updatePaymentStatus(id: number, status: Payment['status'])
     if (id > 10000) { // Assume que IDs altos são mocks
       console.warn('Simulando atualização de pagamento mockado:', id, status);
       
+      // Recuperar o appointment_id do localStorage
+      const storedAppointmentId = localStorage.getItem('lastAppointmentId');
+      let appointmentId = 0;
+      
+      if (storedAppointmentId) {
+        appointmentId = parseInt(storedAppointmentId);
+        console.log('Encontrado appointment_id salvo:', appointmentId);
+      } else {
+        console.warn('Nenhum appointment_id encontrado no localStorage');
+      }
+      
       // Criar um objeto de resposta simulado
       const mockPayment: Payment = {
         id: id,
-        appointment_id: 0, // Valor temporário
-        amount: 0, // Valor temporário
+        appointment_id: appointmentId, // Usar o ID real do agendamento
+        amount: 150, // Valor simulado
         status: status,
         payment_method: 'pix',
         external_reference: `mock_${Date.now()}`,
@@ -267,14 +325,20 @@ export async function updatePaymentStatus(id: number, status: Payment['status'])
       };
       
       // Atualizar o status do agendamento relacionado
-      // Recuperando o appointment_id do localStorage
-      const storedAppointmentId = localStorage.getItem('lastAppointmentId');
-      if (storedAppointmentId) {
-        const appointmentId = parseInt(storedAppointmentId);
+      if (appointmentId > 0) {
         console.log('Atualizando status do agendamento:', appointmentId);
         
-        const appointmentStatus = status === 'approved' ? 'confirmed' : 'pending';
-        await updateAppointmentStatus(appointmentId, appointmentStatus as Appointment['status']);
+        try {
+          const appointmentStatus = status === 'approved' ? 'confirmed' : 'pending';
+          await supabase
+            .from('appointments')
+            .update({ status: appointmentStatus })
+            .eq('id', appointmentId);
+            
+          console.log('Status do agendamento atualizado para:', appointmentStatus);
+        } catch (err) {
+          console.error('Erro ao atualizar status do agendamento:', err);
+        }
       }
       
       return { data: mockPayment, error: null };
