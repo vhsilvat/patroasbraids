@@ -13,10 +13,26 @@ const AuthPage: React.FC<AuthPageProps> = ({ onSuccess }) => {
   const [authSuccess, setAuthSuccess] = useState(false);
 
   const handleSuccess = () => {
+    console.log('AuthPage: Login bem sucedido');
     setAuthSuccess(true);
+    // If there's a specific success callback, use it
     if (onSuccess) {
+      console.log('AuthPage: Chamando callback onSuccess externo');
       onSuccess();
+    } else {
+      console.log('AuthPage: Sem callback externo, aguardando botão de continuar');
     }
+  };
+  
+  const handleContinue = () => {
+    console.log('AuthPage: Botão continuar clicado');
+    // Get the URL to redirect back to if it was saved in session storage
+    const redirectUrl = sessionStorage.getItem('redirectUrl') || '/';
+    console.log('AuthPage: Redirecionando para', redirectUrl);
+    // Clear the stored redirect URL
+    sessionStorage.removeItem('redirectUrl');
+    // Navigate to the stored URL or home page
+    window.location.href = redirectUrl;
   };
 
   return (
@@ -36,7 +52,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onSuccess }) => {
                 : 'Sua conta foi criada com sucesso.'}
             </p>
             <button
-              onClick={onSuccess}
+              onClick={handleContinue}
               className="btn btn-primary w-full"
             >
               Continuar

@@ -70,6 +70,12 @@ const ProfileSection: React.FC = () => {
     }
   };
 
+  // Gerar URL de avatar padrão baseado no nome do usuário
+  const getDefaultAvatar = () => {
+    const fallbackUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name)}&background=8B5CF6&color=fff&size=200`;
+    return profile.photo_url || fallbackUrl;
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <div className="flex justify-between items-center mb-6">
@@ -96,6 +102,17 @@ const ProfileSection: React.FC = () => {
           <p>{success}</p>
         </div>
       )}
+
+      {/* Foto do perfil */}
+      <div className="flex justify-center mb-6">
+        <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-primary">
+          <img 
+            src={getDefaultAvatar()} 
+            alt={`Foto de ${profile.name}`}
+            className="w-full h-full object-cover" 
+          />
+        </div>
+      </div>
       
       {isEditing ? (
         <form onSubmit={handleSubmit}>
@@ -190,7 +207,16 @@ const ProfileSection: React.FC = () => {
           
           <div className="pt-4 border-t border-gray-200 mt-6">
             <button
-              onClick={() => signOut()}
+              onClick={() => {
+                try {
+                  signOut();
+                } catch (e) {
+                  // Força logout em caso de erro
+                  localStorage.clear();
+                  sessionStorage.clear();
+                  window.location.href = '/';
+                }
+              }}
               className="btn border border-red-300 bg-white text-red-600 hover:bg-red-50"
             >
               Sair

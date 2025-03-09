@@ -5,7 +5,6 @@ import TimeSlotPicker from '../TimeSlotPicker/TimeSlotPicker';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { getProfessionals, getProfessionalAvailability, getAppointmentsForDateRange, createAppointment } from '../../lib/services';
-import { createPaymentPreference } from '../../lib/mercadopago';
 import { supabase } from '../../lib/supabase';
 
 interface AppointmentFormProps {

@@ -247,6 +247,8 @@ export async function updateAppointmentStatus(id: number, status: Appointment['s
 
 export async function createPayment(payment: Omit<Payment, 'id' | 'created_at'>): Promise<ApiResponse<Payment>> {
   try {
+    console.log('Criando pagamento:', payment);
+    
     // Tenta criar o pagamento diretamente
     const { data, error } = await supabase
       .from('payments')
@@ -255,29 +257,12 @@ export async function createPayment(payment: Omit<Payment, 'id' | 'created_at'>)
       .single();
       
     if (!error) {
+      console.log('Pagamento criado com sucesso:', data);
       return { data, error };
     }
     
-    // Se falhar devido a RLS, tente um método alternativo: RPC function
-    // Vamos simular um pagamento bem-sucedido sem salvar no banco para não interromper o fluxo
-    console.warn('Erro RLS ao criar pagamento, usando método alternativo:', error);
-    
-    // Criar um objeto de pagamento simulado com um ID aleatório
-    const mockPayment: Payment = {
-      id: Math.floor(Math.random() * 1000000),
-      appointment_id: payment.appointment_id,
-      amount: payment.amount,
-      status: payment.status,
-      payment_method: payment.payment_method || 'pix',
-      external_reference: payment.external_reference || `mock_${Date.now()}`,
-      created_at: new Date().toISOString()
-    };
-    
-    // Log para debugging
-    console.log('Usando pagamento simulado:', mockPayment);
-    
-    return { data: mockPayment, error: null };
-    
+    console.error('Erro ao criar pagamento:', error);
+    return { data: null, error };
   } catch (err) {
     console.error('Erro ao criar pagamento:', err);
     return { data: null, error: err as Error };
@@ -286,65 +271,53 @@ export async function createPayment(payment: Omit<Payment, 'id' | 'created_at'>)
 
 export async function updatePaymentStatus(id: number, status: Payment['status']): Promise<ApiResponse<Payment>> {
   try {
-    // Tenta atualizar o pagamento diretamente
+    console.log(`Atualizando status do pagamento ${id} para ${status}`);
+    
+    // Incluir timestamp de atualização
+    const updateData = { 
+      status,
+      updated_at: new Date().toISOString()
+    };
+    
+    // Tentar método simples primeiro (sem select/single)
+    const { error: updateError } = await supabase
+      .from('payments')
+      .update(updateData)
+      .eq('id', id);
+      
+    if (updateError) {
+      console.error('Erro ao atualizar status do pagamento:', updateError);
+      return { data: null, error: updateError };
+    }
+    
+    // Buscar o pagamento atualizado
     const { data, error } = await supabase
       .from('payments')
-      .update({ status })
+      .select('*')
       .eq('id', id)
-      .select()
       .single();
       
-    if (!error) {
-      return { data, error };
+    if (error) {
+      console.error('Erro ao buscar pagamento atualizado:', error);
+      return { data: null, error };
     }
     
-    // Se for um pagamento mockado (não existe no banco), simular o retorno
-    if (id > 10000) { // Assume que IDs altos são mocks
-      console.warn('Simulando atualização de pagamento mockado:', id, status);
+    console.log('Pagamento atualizado com sucesso:', data);
+    
+    // Atualizar o status do agendamento relacionado
+    if (data && data.appointment_id > 0) {
+      console.log('Atualizando status do agendamento:', data.appointment_id);
       
-      // Recuperar o appointment_id do localStorage
-      const storedAppointmentId = localStorage.getItem('lastAppointmentId');
-      let appointmentId = 0;
-      
-      if (storedAppointmentId) {
-        appointmentId = parseInt(storedAppointmentId);
-        console.log('Encontrado appointment_id salvo:', appointmentId);
-      } else {
-        console.warn('Nenhum appointment_id encontrado no localStorage');
+      try {
+        const appointmentStatus = status === 'approved' ? 'confirmed' : 'pending';
+        await updateAppointmentStatus(data.appointment_id, appointmentStatus as Appointment['status']);
+        console.log('Status do agendamento atualizado para:', appointmentStatus);
+      } catch (err) {
+        console.error('Erro ao atualizar status do agendamento:', err);
       }
-      
-      // Criar um objeto de resposta simulado
-      const mockPayment: Payment = {
-        id: id,
-        appointment_id: appointmentId, // Usar o ID real do agendamento
-        amount: 150, // Valor simulado
-        status: status,
-        payment_method: 'pix',
-        external_reference: `mock_${Date.now()}`,
-        created_at: new Date().toISOString()
-      };
-      
-      // Atualizar o status do agendamento relacionado
-      if (appointmentId > 0) {
-        console.log('Atualizando status do agendamento:', appointmentId);
-        
-        try {
-          const appointmentStatus = status === 'approved' ? 'confirmed' : 'pending';
-          await supabase
-            .from('appointments')
-            .update({ status: appointmentStatus })
-            .eq('id', appointmentId);
-            
-          console.log('Status do agendamento atualizado para:', appointmentStatus);
-        } catch (err) {
-          console.error('Erro ao atualizar status do agendamento:', err);
-        }
-      }
-      
-      return { data: mockPayment, error: null };
     }
     
-    return { data: null, error };
+    return { data, error: null };
   } catch (err) {
     console.error('Erro ao atualizar status do pagamento:', err);
     return { data: null, error: err as Error };

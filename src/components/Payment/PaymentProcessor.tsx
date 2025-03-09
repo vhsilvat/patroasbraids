@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Appointment, Service, Payment } from '../../types/supabase';
-import { createPaymentPreference } from '../../lib/mercadopago';
+import { simulatePaymentApproval } from '../../lib/mercadopago';
 import MockPixPayment from './MockPixPayment';
 import { supabase } from '../../lib/supabase';
 import { updateAppointmentStatus } from '../../lib/services';
@@ -42,25 +42,10 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({
         setLoading(true);
         setError(null);
         
-        // Armazenar o ID do agendamento para uso posterior pelo mock
+        // Armazenar o ID do agendamento para uso posterior
         localStorage.setItem('lastAppointmentId', appointment.id.toString());
         console.log('Armazenado appointment ID:', appointment.id);
         
-        // Contornar as políticas RLS - usar um pagamento mockado para fins de demonstração
-        console.log('Usando fluxo de pagamento mockado para contornar restrições RLS');
-        
-        // Simulando um pagamento com ID aleatório alto
-        const mockPaymentId = Math.floor(Math.random() * 1000000) + 10000;
-        
-        // Armazenar dados para a interface de pagamento
-        setPaymentData({
-          paymentId: mockPaymentId,
-          amount: service.price * 0.5 // 50% do valor como sinal
-        });
-        
-        return;
-        
-        /* CÓDIGO ORIGINAL - DESABILITADO TEMPORARIAMENTE
         // 1. Verificar se o pagamento já existe para este agendamento
         const { data: existingPayments, error: fetchError } = await supabase
           .from('payments')
@@ -71,42 +56,47 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({
           throw new Error(`Erro ao verificar pagamentos: ${fetchError.message}`);
         }
         
-        // 2. Se já existe um pagamento pendente, use-o em vez de criar um novo
+        // 2. Se já existe um pagamento, use-o em vez de criar um novo
         if (existingPayments && existingPayments.length > 0) {
-          const pendingPayment = existingPayments.find(p => p.status === 'pending');
+          // Ordenar pagamentos pelo mais recente primeiro e pegar o primeiro
+          const latestPayment = existingPayments.sort((a, b) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          )[0];
           
-          if (pendingPayment) {
-            setPaymentData({
-              paymentId: pendingPayment.id,
-              amount: pendingPayment.amount
-            });
-            setLoading(false);
-            return;
-          }
+          console.log('Encontrado pagamento existente:', latestPayment);
+          setPaymentData({
+            paymentId: latestPayment.id,
+            amount: latestPayment.amount
+          });
+          return;
         }
         
-        // 3. Caso contrário, crie uma nova preferência de pagamento
-        const { success, paymentId, error: prefError } = await createPaymentPreference({
-          appointmentId: appointment.id,
-          serviceId: service.id,
-          serviceName: service.name,
-          servicePrice: service.price,
-          clientName: 'Cliente', // Idealmente, obter nome do context de auth
-          clientEmail: 'cliente@example.com', // Idealmente, obter email do context de auth
-          appointmentDate: appointment.appointment_date,
-          appointmentTime: appointment.appointment_time
-        });
+        // 3. Caso contrário, crie um novo pagamento
+        const paymentData = {
+          appointment_id: appointment.id,
+          amount: service.price * 0.5, // 50% do valor como sinal
+          status: 'pending' as 'pending',
+          payment_method: 'pix',
+          external_reference: `appointment_${appointment.id}_${Date.now()}`
+        };
         
-        if (!success || !paymentId) {
-          throw new Error(prefError || 'Erro ao criar pagamento');
+        const { data: newPayment, error: paymentError } = await supabase
+          .from('payments')
+          .insert(paymentData)
+          .select()
+          .single();
+        
+        if (paymentError || !newPayment) {
+          throw new Error(paymentError?.message || 'Erro ao criar pagamento');
         }
+        
+        console.log('Pagamento criado com sucesso:', newPayment);
         
         // 4. Armazenar dados para a interface de pagamento
         setPaymentData({
-          paymentId,
-          amount: service.price * 0.5 // 50% do valor como sinal
+          paymentId: newPayment.id,
+          amount: newPayment.amount
         });
-        */
       } catch (err: any) {
         console.error('Erro ao inicializar pagamento:', err);
         setError(err.message || 'Erro ao iniciar o processo de pagamento');

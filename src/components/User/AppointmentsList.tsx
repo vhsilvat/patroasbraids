@@ -85,12 +85,20 @@ const AppointmentsList: React.FC = () => {
     let textColor = 'text-gray-800';
     let label = 'Desconhecido';
 
-    // Se houver pagamentos e pelo menos um estiver pendente, o status é pendente
-    const hasPendingPayment = payments && payments.length > 0 && 
-      payments.some(payment => payment.status === 'pending');
-    
-    if (hasPendingPayment) {
-      status = 'pending';
+    // Se houver pagamentos, verificar se todos estão aprovados ou se algum está pendente
+    if (payments && payments.length > 0) {
+      // Se algum pagamento estiver aprovado, o agendamento está confirmado
+      const hasApprovedPayment = payments.some(payment => payment.status === 'approved');
+      
+      if (hasApprovedPayment) {
+        status = 'confirmed';
+      } else {
+        // Se não tem aprovado mas tem pendente, aguardando pagamento
+        const hasPendingPayment = payments.some(payment => payment.status === 'pending');
+        if (hasPendingPayment) {
+          status = 'pending';
+        }
+      }
     }
 
     switch (status) {
@@ -258,11 +266,12 @@ const AppointmentsList: React.FC = () => {
                   </div>
                 </div>
                 
-                {/* Se o status for pendente, mostrar botões de ação */}
+                {/* Se o status for pendente ou houver pagamentos pendentes, mostrar botões de ação */}
                 {(appointment.status === 'pending' || 
                   (appointment.payment && 
                   appointment.payment.length > 0 && 
-                  appointment.payment.some(p => p.status === 'pending'))) && (
+                  appointment.payment.some(p => p.status === 'pending') && 
+                  !appointment.payment.some(p => p.status === 'approved'))) && (
                   <div className="mt-4 pt-4 border-t border-gray-200 flex justify-end">
                     <button
                       className="btn btn-primary"
